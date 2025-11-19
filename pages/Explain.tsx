@@ -1,0 +1,219 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { MessageCircleIcon, UploadIcon, CameraIcon, LoaderIcon, ZapIcon } from '../components/Icons';
+import { explainHomework, generateVisual } from '../services/gemini';
+import { SimpleMarkdown } from '../components/Markdown';
+import { ChatMessage } from '../types';
+
+// Keywords that trigger automatic graph generation
+const GRAPH_KEYWORDS = [
+  'graph', 'plot', 'chart', 'linear', 'equation', 'slope', 'intercept', 
+  'parabola', 'quadratic', 'axis', 'coordinate', 'geometry', 'triangle', 
+  'circle', 'rectangle', 'polygon', 'function', 'grid'
+];
+
+const Explain = () => {
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { role: 'model', text: 'Hi! I\'m StudySpark. Upload a photo of your homework or type a question, and I\'ll help you solve it step-by-step!' }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isGeneratingVisual]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGenerateVisual = async (textContext: string) => {
+    if(isGeneratingVisual) return;
+    setIsGeneratingVisual(true);
+    
+    try {
+      // Pass the user's context to the visual generator
+      const imageUrl = await generateVisual(textContext.substring(0, 500)); 
+      if (imageUrl) {
+        setMessages(prev => [...prev, { 
+            role: 'model', 
+            text: "Here is a graph/visual to help:", 
+            visualUrl: imageUrl 
+        }]);
+      } else {
+         setMessages(prev => [...prev, { role: 'model', text: "Sorry, I couldn't generate a visual for this specific topic right now." }]);
+      }
+    } catch(e) {
+        console.error(e);
+    } finally {
+        setIsGeneratingVisual(false);
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((!input.trim() && !selectedImage) || isLoading) return;
+
+    const userText = input;
+    const userMsg: ChatMessage = {
+      role: 'user',
+      text: userText,
+      image: selectedImage || undefined
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+    setIsLoading(true);
+    setInput('');
+    const currentImage = selectedImage;
+    setSelectedImage(null);
+
+    try {
+      const base64Image = currentImage ? currentImage.split(',')[1] : undefined;
+      const responseText = await explainHomework(userText, base64Image);
+      
+      setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+
+      // AUTO-GRAPH CHECK
+      // If the user input mentions graphing keywords, automatically trigger visual generation
+      const lowerInput = userText.toLowerCase();
+      const needsGraph = GRAPH_KEYWORDS.some(keyword => lowerInput.includes(keyword));
+
+      if (needsGraph) {
+        // We trigger this *after* the text explanation so the user sees text first
+        setTimeout(() => {
+           handleGenerateVisual(userText);
+        }, 500);
+      }
+
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'model', text: "Sorry, something went wrong.", isError: true }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)]">
+      <div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4 no-scrollbar">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'model' ? 'bg-blue-600' : 'bg-slate-200'}`}>
+              {msg.role === 'model' ? <ZapIcon className="w-4 h-4 text-white" /> : <div className="w-4 h-4 bg-slate-400 rounded-full" />}
+            </div>
+            
+            <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-4 shadow-sm ${
+              msg.role === 'user' 
+                ? 'bg-blue-600 text-white rounded-tr-none' 
+                : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
+            }`}>
+              {msg.image && (
+                <img src={msg.image} alt="User upload" className="max-w-full h-auto rounded-lg mb-3 border border-white/20" />
+              )}
+              {msg.role === 'model' ? (
+                <div>
+                    <SimpleMarkdown text={msg.text} />
+                    {msg.visualUrl && (
+                        <div className="mt-4 rounded-lg overflow-hidden border border-slate-200">
+                             <img src={msg.visualUrl} alt="AI Generated Visual" className="w-full h-auto" />
+                        </div>
+                    )}
+                    {!msg.visualUrl && !msg.isError && (
+                        <button 
+                            onClick={() => handleGenerateVisual(msg.text)}
+                            className="mt-4 text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium bg-blue-50 px-3 py-1.5 rounded-full transition-colors"
+                        >
+                            <MessageCircleIcon className="w-3 h-3" />
+                            Generate Graph/Diagram
+                        </button>
+                    )}
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{msg.text}</p>
+              )}
+            </div>
+          </div>
+        ))}
+        {(isLoading || isGeneratingVisual) && (
+          <div className="flex gap-4">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+               <ZapIcon className="w-4 h-4 text-white" />
+            </div>
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+              <LoaderIcon className="w-4 h-4 animate-spin text-blue-600" />
+              <span className="text-slate-500 text-sm">{isGeneratingVisual ? 'Drawing graph...' : 'Thinking...'}</span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="mt-4 relative">
+        {selectedImage && (
+          <div className="absolute bottom-full mb-2 left-0 bg-white p-2 rounded-lg shadow-lg border border-slate-200 animate-fade-in">
+            <div className="relative">
+              <img src={selectedImage} alt="Preview" className="h-20 w-auto rounded" />
+              <button 
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 items-end focus-within:ring-2 focus-within:ring-blue-100 transition-shadow">
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()}
+            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+            title="Upload Image"
+          >
+            <CameraIcon className="w-5 h-5" />
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/*" 
+            onChange={handleImageUpload}
+          />
+          
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a question (e.g. 'Graph y=2x+3')..."
+            className="flex-1 bg-transparent border-none focus:ring-0 p-3 max-h-32 resize-none text-slate-700 placeholder:text-slate-400 text-base"
+            rows={1}
+            onKeyDown={(e) => {
+              if(e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
+          
+          <button 
+            type="submit"
+            disabled={isLoading || (!input.trim() && !selectedImage)}
+            className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+          >
+            {isLoading ? <LoaderIcon className="w-5 h-5 animate-spin" /> : <UploadIcon className="w-5 h-5" />}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default Explain;
