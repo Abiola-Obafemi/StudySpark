@@ -110,8 +110,9 @@ const Login = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter your name..."
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-lg"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none bg-slate-50 focus:bg-white transition-all text-lg text-slate-900 placeholder:text-slate-400"
               required
+              autoFocus
             />
           </div>
 

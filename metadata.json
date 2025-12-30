@@ -1,5 +1,7 @@
 {
   "name": "StudySpark",
-  "description": "AI-powered homework helper, study guide creator, and flashcard generator focused on learning and explanation.",
-  "requestFramePermissions": []
+  "description": "AI-powered Socratic tutor, study guide creator, and flashcard generator focused on student growth.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

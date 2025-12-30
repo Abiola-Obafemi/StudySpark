@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { BookOpenIcon, LoaderIcon, UploadIcon, DownloadIcon, FileTextIcon, ZapIcon } from '../components/Icons';
+
+import React, { useState, useRef } from 'react';
+import { BookOpenIcon, LoaderIcon, DownloadIcon, FileTextIcon, ZapIcon, CameraIcon } from '../components/Icons';
 import { generateStudyGuide, generateVisual } from '../services/gemini';
 import { SimpleMarkdown } from '../components/Markdown';
 import { useUser } from '../context/UserContext';
 import { StudyGuide } from '../types';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 const Study = () => {
   const [topic, setTopic] = useState('');
@@ -11,7 +14,9 @@ const Study = () => {
   const [currentGuide, setCurrentGuide] = useState<StudyGuide | null>(null);
   const [loading, setLoading] = useState(false);
   const [visualLoading, setVisualLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
+  const guideRef = useRef<HTMLDivElement>(null);
   const { savedGuides, saveGuide, deleteGuide } = useUser();
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -25,7 +30,6 @@ const Study = () => {
       const content = await generateStudyGuide(topic);
       let visualUrl = undefined;
 
-      // If Visual Mode is on, automatically generate the visual
       if (isVisualMode) {
          visualUrl = await generateVisual(`Educational infographic summary about: ${topic}. Clean, colorful, easy to read diagram.`);
       }
@@ -45,25 +49,9 @@ const Study = () => {
     }
   };
 
-  const handleGenerateVisual = async () => {
-    if(!currentGuide || visualLoading) return;
-    setVisualLoading(true);
-    try {
-        const visualUrl = await generateVisual(`Educational diagram or infographic for: ${currentGuide.topic}. ${currentGuide.content.substring(0, 100)}`);
-        if(visualUrl) {
-            setCurrentGuide(prev => prev ? ({...prev, visualUrl}) : null);
-        }
-    } catch(e) {
-        console.error(e);
-    } finally {
-        setVisualLoading(false);
-    }
-  }
-
   const handleSave = () => {
     if (currentGuide) {
       saveGuide(currentGuide);
-      // Simple feedback
       const btn = document.getElementById('saveBtn');
       if(btn) {
           const ogText = btn.innerText;
@@ -73,22 +61,49 @@ const Study = () => {
     }
   };
 
-  const downloadGuide = (format: 'md' | 'txt') => {
-    if (!currentGuide) return;
-    
-    const content = currentGuide.content;
-    const filename = `${currentGuide.topic.replace(/\s+/g, '_')}_StudyGuide.${format}`;
-    const mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
-    
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const exportAsImage = async () => {
+    if (!guideRef.current) return;
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(guideRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      });
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `${currentGuide?.topic || 'StudyGuide'}.png`;
+      link.click();
+    } catch (err) {
+      console.error('Export Image Error:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportAsPDF = async () => {
+    if (!guideRef.current) return;
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(guideRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${currentGuide?.topic || 'StudyGuide'}.pdf`);
+    } catch (err) {
+      console.error('Export PDF Error:', err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const loadGuide = (guide: StudyGuide) => {
@@ -107,7 +122,7 @@ const Study = () => {
             </div>
             <div className="flex-1 text-center md:text-left">
                 <h1 className="text-3xl font-bold text-slate-900 mb-2">Super Study Guide</h1>
-                <p className="text-slate-500">Turn any topic into perfect notes instantly.</p>
+                <p className="text-slate-500">Transform complex topics into crystal-clear study notes.</p>
             </div>
         </div>
         
@@ -117,8 +132,8 @@ const Study = () => {
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="What do you want to learn? (e.g., Photosynthesis, WW2...)"
-                className="flex-1 px-6 py-4 rounded-xl text-lg text-slate-800 bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all"
+                placeholder="What are we learning today?"
+                className="flex-1 px-6 py-4 rounded-xl text-lg text-slate-900 bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all placeholder:text-slate-400"
             />
             <button
                 type="submit"
@@ -135,81 +150,92 @@ const Study = () => {
               </div>
               <input type="checkbox" className="hidden" checked={isVisualMode} onChange={(e) => setIsVisualMode(e.target.checked)} />
               <span className="font-medium text-slate-600 group-hover:text-emerald-600 transition-colors flex items-center gap-2">
-                  Visual Mode 🖼️ <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">New</span>
+                  Visual Diagrams 🖼️
               </span>
           </label>
         </form>
       </div>
 
-      {/* Main Display Area */}
       {loading && (
         <div className="text-center py-24 print:hidden animate-pulse">
           <div className="inline-block relative">
              <BookOpenIcon className="w-16 h-16 text-slate-200" />
              <LoaderIcon className="w-8 h-8 text-emerald-500 animate-spin absolute -bottom-2 -right-2" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mt-6">Crafting your guide...</h3>
-          <p className="text-slate-400 mt-2">{isVisualMode ? 'Generating visuals and text...' : 'Organizing key concepts...'}</p>
+          <h3 className="text-xl font-bold text-slate-800 mt-6">Writing your guide...</h3>
+          <p className="text-slate-400 mt-2">Connecting concepts and simplifying ideas...</p>
         </div>
       )}
 
       {currentGuide && (
-        <div className="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden animate-fade-in-up mb-12 print:shadow-none print:border-none">
-           {/* Notebook Header */}
-           <div className="bg-yellow-50 border-b border-yellow-100 p-8 print:hidden">
-              <div className="flex justify-between items-start">
-                  <div>
-                      <h2 className="text-3xl font-bold text-slate-900 mb-2 font-serif">{currentGuide.topic}</h2>
-                      <p className="text-slate-500 font-mono text-sm">Created: {currentGuide.dateCreated}</p>
+        <div className="space-y-4 mb-12 animate-fade-in-up">
+           <div className="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-none">
+              <div ref={guideRef} className="bg-white">
+                {/* Notebook Header */}
+                <div className="bg-yellow-50/50 border-b border-yellow-100 p-8">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h2 className="text-3xl font-bold text-slate-900 mb-2 font-serif">{currentGuide.topic}</h2>
+                            <p className="text-slate-500 font-mono text-xs">Generated by StudySpark AI • {currentGuide.dateCreated}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8 md:p-12 min-h-[500px] bg-[linear-gradient(#e5e7eb_0.5px,transparent_0.5px)] bg-[length:100%_2rem]">
+                  {currentGuide.visualUrl && (
+                    <div className="mb-10 rounded-2xl overflow-hidden border-4 border-white shadow-lg transform rotate-1 print:rotate-0 print:shadow-none">
+                        <img src={currentGuide.visualUrl} alt="Topic Visual" className="w-full h-auto max-h-[500px] object-contain bg-slate-50" />
+                    </div>
+                  )}
+                  
+                  <div className="prose prose-slate max-w-none print:prose-sm">
+                      <SimpleMarkdown text={currentGuide.content} />
                   </div>
-                  <div className="flex gap-2">
-                      <button onClick={handleSave} id="saveBtn" className="bg-white/50 hover:bg-white text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors border border-yellow-200">
-                          Save
-                      </button>
-                  </div>
+                </div>
               </div>
-           </div>
+              
+              <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-wrap gap-4 justify-between items-center print:hidden">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={exportAsPDF}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl text-slate-700 font-bold border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {isExporting ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <DownloadIcon className="w-4 h-4 text-blue-600" />}
+                        Download PDF
+                    </button>
+                    <button 
+                        onClick={exportAsImage}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl text-slate-700 font-bold border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {isExporting ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <CameraIcon className="w-4 h-4 text-emerald-600" />}
+                        Save as Image
+                    </button>
+                    <button 
+                        onClick={() => {
+                          const blob = new Blob([currentGuide.content], { type: 'text/markdown' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${currentGuide.topic}.md`;
+                          a.click();
+                        }}
+                        className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl text-slate-700 font-bold border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                    >
+                        <FileTextIcon className="w-4 h-4 text-violet-600" />
+                        Markdown
+                    </button>
+                </div>
 
-           <div className="p-8 md:p-12 min-h-[500px] bg-[linear-gradient(#e5e7eb_1px,transparent_1px)] bg-[length:100%_2rem]">
-             {currentGuide.visualUrl && (
-               <div className="mb-8 rounded-2xl overflow-hidden border-4 border-white shadow-lg transform rotate-1 hover:rotate-0 transition-transform duration-500 print:border-none">
-                   <img src={currentGuide.visualUrl} alt="Topic Visual" className="w-full h-auto max-h-96 object-cover bg-slate-100" />
-               </div>
-             )}
-             
-             <div className="prose prose-slate max-w-none print:prose-sm">
-                <SimpleMarkdown text={currentGuide.content} />
-             </div>
-           </div>
-           
-           <div className="bg-slate-50 p-4 border-t border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center print:hidden">
-             <div className="flex items-center gap-2">
-                <button 
-                    onClick={() => window.print()}
-                    className="p-2 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
-                    title="Print / Save PDF"
+                <button
+                    onClick={handleSave}
+                    id="saveBtn"
+                    className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md active:scale-95"
                 >
-                    <DownloadIcon className="w-5 h-5" />
+                    Save to Library
                 </button>
-                <button 
-                    onClick={() => downloadGuide('md')}
-                    className="p-2 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
-                    title="Download Markdown"
-                >
-                    <FileTextIcon className="w-5 h-5" />
-                </button>
-             </div>
-
-             {!currentGuide.visualUrl && (
-                 <button
-                    onClick={handleGenerateVisual}
-                    disabled={visualLoading}
-                    className="text-emerald-600 text-sm font-bold hover:bg-emerald-50 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                    {visualLoading ? <LoaderIcon className="animate-spin w-4 h-4" /> : <ZapIcon className="w-4 h-4" />}
-                    Add Visual
-                </button>
-             )}
+              </div>
            </div>
         </div>
       )}
@@ -219,7 +245,7 @@ const Study = () => {
         <div className="print:hidden animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">
                 <BookOpenIcon className="w-6 h-6 text-emerald-500" />
-                Library
+                Your Library
             </h2>
             <div className="grid md:grid-cols-2 gap-4">
                 {savedGuides.map(guide => (
