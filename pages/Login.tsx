@@ -63,6 +63,7 @@ const Login = () => {
 
     try {
       const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        // Using EmailJS REST API
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,7 +71,7 @@ const Login = () => {
           template_id: templateId,
           user_id: publicKey,
           template_params: {
-            email: emailAddr, // Matches {{email}} in your screenshot
+            email: emailAddr,
             user_name: name,
             otp_code: code,
           }
@@ -168,7 +169,7 @@ const Login = () => {
 
         <div className="mb-8">
           <Logo className="w-16 h-16 mx-auto mb-4" />
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">StudySpark</h1>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight text-center">StudySpark</h1>
         </div>
 
         {error && (
@@ -276,7 +277,15 @@ const Login = () => {
           <div className="animate-fade-in-up space-y-6">
             <div className="space-y-2">
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Enter Code</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Check <span className="font-bold text-blue-600">{schoolEmail}</span> for your 6-digit access code.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">We sent a 6-digit code to <span className="font-bold text-blue-600 block">{schoolEmail}</span></p>
+            </div>
+
+            {/* JUNK MAIL NOTICE: HIGH VISIBILITY */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl animate-pulse">
+                <p className="text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center gap-2">
+                    <span className="text-lg">📩</span>
+                    DON'T SEE IT? Check your <span className="underline decoration-2">JUNK</span> or <span className="underline decoration-2">SPAM</span> folder!
+                </p>
             </div>
 
             <div className="flex justify-between gap-2 max-w-[280px] mx-auto">
@@ -306,7 +315,7 @@ const Login = () => {
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                         Code not arriving?{' '}
                         {resendTimer > 0 ? (
-                            <span className="font-bold text-slate-400">Try again in {resendTimer}s</span>
+                            <span className="font-bold text-slate-400">Resend available in {resendTimer}s</span>
                         ) : (
                             <button 
                               onClick={async () => {
@@ -316,6 +325,7 @@ const Login = () => {
                                 await sendVerificationEmail(schoolEmail, code);
                                 setResendTimer(30);
                                 setIsSendingEmail(false);
+                                alert("New code sent! Please check your Inbox and Junk/Spam folders.");
                               }} 
                               className="text-blue-600 font-bold hover:underline"
                             >
@@ -323,7 +333,7 @@ const Login = () => {
                             </button>
                         )}
                     </p>
-                    <button onClick={() => setStep('email')} className="text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600">Edit Email Address</button>
+                    <button onClick={() => setStep('email')} className="text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Wrong email? Change it</button>
                 </div>
             )}
           </div>
@@ -348,7 +358,8 @@ const Login = () => {
         )}
 
         <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 Real-Time Verification System 🛡️
             </p>
         </div>
