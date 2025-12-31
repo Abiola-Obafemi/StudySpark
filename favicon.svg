@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Book Base -->
+  <path d="M10 65C10 65 25 60 50 65C75 60 90 65 90 65V35C90 35 75 30 50 35C25 30 10 35 10 35V65Z" fill="#3B82F6" stroke="#2563EB" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M50 65V35" stroke="#2563EB" stroke-width="4" stroke-linecap="round"/>
+  <!-- Pages Effect -->
+  <path d="M10 60C10 60 25 55 50 60" stroke="#93C5FD" stroke-width="3" stroke-linecap="round"/>
+  <path d="M90 60C90 60 75 55 50 60" stroke="#93C5FD" stroke-width="3" stroke-linecap="round"/>
+  <!-- Lightning Bolt -->
+  <path d="M55 10L35 45H52L45 85L75 45H58L65 10H55Z" fill="#F59E0B" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+</svg>
