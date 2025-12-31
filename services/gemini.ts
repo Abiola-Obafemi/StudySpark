@@ -1,20 +1,32 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Flashcard, QuizQuestion } from "../types";
 
 const getClient = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key not found");
+  // Vite often stringsify 'undefined' if the env var is missing
+  if (!apiKey || apiKey === "undefined" || apiKey === "") {
+    throw new Error("API_KEY_MISSING");
+  }
   return new GoogleGenAI({ apiKey });
+};
+
+const HANDLE_KEY_ERROR = (error: any) => {
+  if (error.message === "API_KEY_MISSING") {
+    return "🔑 StudySpark needs an API Key to work. Please add 'API_KEY' to your Vercel Environment Variables or local .env file.";
+  }
+  console.error("Gemini Service Error:", error);
+  return "I'm having a hard time connecting to the brain center. Please try again in a moment.";
 };
 
 // ------------------------------------------------------------------
 // Visual Generator (Graphs, Diagrams)
 // ------------------------------------------------------------------
 export const generateVisual = async (prompt: string): Promise<string | null> => {
-  const ai = getClient();
-  const model = 'gemini-2.5-flash-image';
-  
   try {
+    const ai = getClient();
+    const model = 'gemini-2.5-flash-image';
+    
     const response = await ai.models.generateContent({
       model,
       contents: {
@@ -55,40 +67,36 @@ export const explainHomework = async (
   text: string,
   imageBase64?: string,
 ): Promise<string> => {
-  const ai = getClient();
-  
   const systemInstruction = `
     You are StudySpark, a world-class Socratic Tutor. 
     
     YOUR UNBREAKABLE OATH:
-    1. NEVER provide a final answer, solution, or value (e.g., "x = 5" or "The theme is betrayal").
-    2. If a student asks for the answer, politely refuse and explain that your goal is to help THEM find it.
+    1. NEVER provide a final answer, solution, or value.
+    2. If a student asks for the answer, politely refuse.
     3. Break complex problems into tiny, logical steps.
     4. Focus on the "WHY" behind the concept.
-    5. Ask ONE targeted question at a time to lead the student to the next realization.
-    6. If they are completely lost, provide a conceptual hint or an analogy.
-    7. For multiple choice: Don't tell them which letter is right. Explain why the concepts in the options are different.
+    5. Ask ONE targeted question at a time.
     
     Response Tone: Encouraging, patient, and challenging.
-    Formatting: Use Markdown, bolding, and lists for readability.
   `;
 
-  const model = "gemini-3-flash-preview";
-  
-  const parts: any[] = [];
-  if (imageBase64) {
-    parts.push({
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: imageBase64,
-      },
-    });
-  }
-  if (text) {
-    parts.push({ text });
-  }
-
   try {
+    const ai = getClient();
+    const model = "gemini-3-flash-preview";
+    
+    const parts: any[] = [];
+    if (imageBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: imageBase64,
+        },
+      });
+    }
+    if (text) {
+      parts.push({ text });
+    }
+
     const response = await ai.models.generateContent({
       model,
       contents: { parts },
@@ -97,10 +105,9 @@ export const explainHomework = async (
         temperature: 0.7, 
       }
     });
-    return response.text || "I'm thinking... Let's look at this another way. What's the first thing you notice about this problem?";
+    return response.text || "I'm thinking... What's the first step you'd usually take here?";
   } catch (error) {
-    console.error("Explainer Error:", error);
-    return "Sorry, I'm having a hard time connecting right now. Can you try rephrasing your question?";
+    return HANDLE_KEY_ERROR(error);
   }
 };
 
@@ -108,11 +115,6 @@ export const explainHomework = async (
 // Flashcard Generator
 // ------------------------------------------------------------------
 export const generateFlashcards = async (topic: string, count: number = 5): Promise<Flashcard[]> => {
-  const ai = getClient();
-  const model = "gemini-3-flash-preview";
-
-  const prompt = `Create ${count} study flashcards about: ${topic}. Focus on key terms and definitions.`;
-
   const schema: any = {
     type: Type.ARRAY,
     items: {
@@ -126,9 +128,11 @@ export const generateFlashcards = async (topic: string, count: number = 5): Prom
   };
 
   try {
+    const ai = getClient();
+    const model = "gemini-3-flash-preview";
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: `Create ${count} study flashcards about: ${topic}. Focus on key terms and definitions.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -146,11 +150,6 @@ export const generateFlashcards = async (topic: string, count: number = 5): Prom
 // Quiz Generator
 // ------------------------------------------------------------------
 export const generateQuiz = async (topic: string, difficulty: string = "medium"): Promise<QuizQuestion[]> => {
-  const ai = getClient();
-  const model = "gemini-3-flash-preview";
-
-  const prompt = `Create a 5-question multiple choice quiz about: ${topic}. Difficulty: ${difficulty}.`;
-
   const schema: any = {
     type: Type.ARRAY,
     items: {
@@ -170,9 +169,11 @@ export const generateQuiz = async (topic: string, difficulty: string = "medium")
   };
 
   try {
+    const ai = getClient();
+    const model = "gemini-3-flash-preview";
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: `Create a 5-question multiple choice quiz about: ${topic}. Difficulty: ${difficulty}.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -190,20 +191,15 @@ export const generateQuiz = async (topic: string, difficulty: string = "medium")
 // Study Guide Generator
 // ------------------------------------------------------------------
 export const generateStudyGuide = async (topic: string): Promise<string> => {
-  const ai = getClient();
-  const model = "gemini-3-flash-preview";
-
-  const prompt = `Create a comprehensive study guide for: ${topic}. 
-  Focus on conceptual understanding. Use Markdown.`;
-
   try {
+    const ai = getClient();
+    const model = "gemini-3-flash-preview";
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: `Create a comprehensive study guide for: ${topic}. Focus on conceptual understanding. Use Markdown.`,
     });
     return response.text || "Failed to generate guide.";
   } catch (error) {
-    console.error("Study Guide Error:", error);
-    return "Could not create the study guide.";
+    return HANDLE_KEY_ERROR(error);
   }
 };
