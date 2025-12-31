@@ -21,6 +21,9 @@ interface UserContextType {
   chatHistory: ChatMessage[];
   updateChatHistory: (messages: ChatMessage[]) => void;
   clearChatHistory: () => void;
+
+  exportData: () => void;
+  importData: (jsonData: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -111,13 +114,47 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setChatHistory([{ role: 'model', text: 'History cleared. What should we tackle next? 🧠' }]);
   };
 
+  const exportData = () => {
+    const data = {
+      user,
+      guides: savedGuides,
+      flashcards: savedFlashcards,
+      quizzes: savedQuizzes,
+      chat: chatHistory,
+      version: '1.0.0',
+      timestamp: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `StudySpark_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (jsonData: string) => {
+    try {
+      const data = JSON.parse(jsonData);
+      if (data.user) setUser(data.user);
+      if (data.guides) setSavedGuides(data.guides);
+      if (data.flashcards) setSavedFlashcards(data.flashcards);
+      if (data.quizzes) setSavedQuizzes(data.quizzes);
+      if (data.chat) setChatHistory(data.chat);
+      alert("Study data restored successfully! 🚀");
+    } catch (e) {
+      alert("Invalid backup file. Please try again.");
+    }
+  };
+
   return (
     <UserContext.Provider value={{ 
       user, login, logout, 
       savedGuides, saveGuide, deleteGuide,
       savedFlashcards, saveFlashcards, deleteFlashcards,
       savedQuizzes, saveQuiz,
-      chatHistory, updateChatHistory, clearChatHistory
+      chatHistory, updateChatHistory, clearChatHistory,
+      exportData, importData
     }}>
       {children}
     </UserContext.Provider>

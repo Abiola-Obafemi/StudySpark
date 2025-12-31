@@ -1,3 +1,4 @@
+
 export interface Flashcard {
   front: string;
   back: string;
@@ -42,8 +43,10 @@ export interface ChatSession {
 export interface User {
   name: string;
   email: string;
+  schoolEmail: string;
   avatar?: string;
   provider: 'google' | 'microsoft' | 'email';
+  isVerified: boolean;
 }
 
 export interface ChatMessage {
