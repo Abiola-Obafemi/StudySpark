@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, StudyGuide, FlashcardSet, QuizData, ChatSession } from '../types';
+import { User, StudyGuide, FlashcardSet, QuizData, ChatMessage } from '../types';
 
 interface UserContextType {
   user: User | null;
@@ -16,6 +17,10 @@ interface UserContextType {
 
   savedQuizzes: QuizData[];
   saveQuiz: (quiz: QuizData) => void;
+
+  chatHistory: ChatMessage[];
+  updateChatHistory: (messages: ChatMessage[]) => void;
+  clearChatHistory: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -25,6 +30,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [savedGuides, setSavedGuides] = useState<StudyGuide[]>([]);
   const [savedFlashcards, setSavedFlashcards] = useState<FlashcardSet[]>([]);
   const [savedQuizzes, setSavedQuizzes] = useState<QuizData[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -39,6 +45,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const quizzes = localStorage.getItem('studyspark_quizzes');
     if (quizzes) setSavedQuizzes(JSON.parse(quizzes));
+
+    const chat = localStorage.getItem('studyspark_chat_v1');
+    if (chat) setChatHistory(JSON.parse(chat));
   }, []);
 
   // Persist to local storage whenever state changes
@@ -59,13 +68,19 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('studyspark_quizzes', JSON.stringify(savedQuizzes));
   }, [savedQuizzes]);
 
+  useEffect(() => {
+    localStorage.setItem('studyspark_chat_v1', JSON.stringify(chatHistory));
+  }, [chatHistory]);
+
   const login = (newUser: User) => {
     setUser(newUser);
   };
 
   const logout = () => {
     setUser(null);
+    setChatHistory([]);
     localStorage.removeItem('studyspark_user');
+    localStorage.removeItem('studyspark_chat_v1');
   };
 
   const saveGuide = (guide: StudyGuide) => {
@@ -88,12 +103,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSavedQuizzes(prev => [quiz, ...prev]);
   }
 
+  const updateChatHistory = (messages: ChatMessage[]) => {
+    setChatHistory(messages);
+  };
+
+  const clearChatHistory = () => {
+    setChatHistory([{ role: 'model', text: 'History cleared. What should we tackle next? 🧠' }]);
+  };
+
   return (
     <UserContext.Provider value={{ 
       user, login, logout, 
       savedGuides, saveGuide, deleteGuide,
       savedFlashcards, saveFlashcards, deleteFlashcards,
-      savedQuizzes, saveQuiz
+      savedQuizzes, saveQuiz,
+      chatHistory, updateChatHistory, clearChatHistory
     }}>
       {children}
     </UserContext.Provider>

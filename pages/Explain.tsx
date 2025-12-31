@@ -4,6 +4,7 @@ import { MessageCircleIcon, UploadIcon, CameraIcon, LoaderIcon, ZapIcon } from '
 import { explainHomework, generateVisual } from '../services/gemini';
 import { SimpleMarkdown } from '../components/Markdown';
 import { ChatMessage } from '../types';
+import { useUser } from '../context/UserContext';
 
 const GRAPH_KEYWORDS = [
   'graph', 'plot', 'chart', 'linear', 'equation', 'slope', 'intercept', 
@@ -12,19 +13,26 @@ const GRAPH_KEYWORDS = [
 ];
 
 const Explain = () => {
+  const { chatHistory, updateChatHistory, clearChatHistory } = useUser();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: 'Hi! I\'m StudySpark, your personal tutor. Send me a problem you\'re working on. \n\nI won\'t give you the answer, but I\'ll help you understand how to find it yourself! 🧠✨' }
-  ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Initialize if history is empty
+  useEffect(() => {
+    if (chatHistory.length === 0) {
+      updateChatHistory([
+        { role: 'model', text: 'Hi! I\'m StudySpark, your personal tutor. Send me a problem you\'re working on. \n\nI won\'t give you the answer, but I\'ll help you understand how to find it yourself! 🧠✨' }
+      ]);
+    }
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isGeneratingVisual]);
+  }, [chatHistory, isGeneratingVisual]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,7 +52,7 @@ const Explain = () => {
     try {
       const imageUrl = await generateVisual(textContext.substring(0, 500)); 
       if (imageUrl) {
-        setMessages(prev => [...prev, { 
+        updateChatHistory([...chatHistory, { 
             role: 'model', 
             text: "I've drawn this diagram to help you visualize the concept:", 
             visualUrl: imageUrl 
@@ -68,7 +76,9 @@ const Explain = () => {
       image: selectedImage || undefined
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    const newHistory = [...chatHistory, userMsg];
+    updateChatHistory(newHistory);
+    
     setIsLoading(true);
     setInput('');
     const currentImage = selectedImage;
@@ -78,37 +88,50 @@ const Explain = () => {
       const base64Image = currentImage ? currentImage.split(',')[1] : undefined;
       const responseText = await explainHomework(userText, base64Image);
       
-      setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+      const updatedHistory = [...newHistory, { role: 'model', text: responseText } as ChatMessage];
+      updateChatHistory(updatedHistory);
 
       const lowerInput = userText.toLowerCase();
       const needsGraph = GRAPH_KEYWORDS.some(keyword => lowerInput.includes(keyword));
 
       if (needsGraph) {
-        setTimeout(() => {
-           handleGenerateVisual(userText);
-        }, 800);
+        // Pass the context of the last few messages to visual generator
+        handleGenerateVisual(userText);
       }
 
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'model', text: "Sorry, I hit a snag while thinking. Let's try rephrasing the question?", isError: true }]);
+      updateChatHistory([...newHistory, { role: 'model', text: "Sorry, I hit a snag while thinking. Let's try rephrasing the question?", isError: true }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)]">
+    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)] relative">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <MessageCircleIcon className="w-5 h-5 text-blue-500" />
+          Tutoring Session
+        </h2>
+        <button 
+          onClick={clearChatHistory}
+          className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest px-3 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10"
+        >
+          Clear History
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4 no-scrollbar">
-        {messages.map((msg, idx) => (
+        {chatHistory.map((msg, idx) => (
           <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-fade-in-up`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'model' ? 'bg-blue-600' : 'bg-slate-300'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'model' ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
               {msg.role === 'model' ? <ZapIcon className="w-4 h-4 text-white" /> : <div className="w-4 h-4 bg-slate-500 rounded-full" />}
             </div>
             
             <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-4 shadow-sm ${
               msg.role === 'user' 
                 ? 'bg-blue-600 text-white rounded-tr-none' 
-                : 'bg-white border border-slate-200 text-slate-900 rounded-tl-none'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-none transition-colors'
             }`}>
               {msg.image && (
                 <img src={msg.image} alt="Handwriting" className="max-w-full h-auto rounded-lg mb-3 border border-white/20" />
@@ -117,7 +140,7 @@ const Explain = () => {
                 <div>
                     <SimpleMarkdown text={msg.text} />
                     {msg.visualUrl && (
-                        <div className="mt-4 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 p-2">
+                        <div className="mt-4 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
                              <img src={msg.visualUrl} alt="Educational Diagram" className="w-full h-auto" />
                         </div>
                     )}
@@ -133,9 +156,9 @@ const Explain = () => {
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                <ZapIcon className="w-4 h-4 text-white" />
             </div>
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
               <LoaderIcon className="w-4 h-4 animate-spin text-blue-600" />
-              <span className="text-slate-500 text-sm font-medium">{isGeneratingVisual ? 'Drawing visual aid...' : 'Preparing hint...'}</span>
+              <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">{isGeneratingVisual ? 'Drawing visual aid...' : 'Preparing hint...'}</span>
             </div>
           </div>
         )}
@@ -144,7 +167,7 @@ const Explain = () => {
 
       <div className="mt-4 relative">
         {selectedImage && (
-          <div className="absolute bottom-full mb-2 left-0 bg-white p-2 rounded-lg shadow-lg border border-slate-200">
+          <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-slate-900 p-2 rounded-lg shadow-lg border border-slate-200 dark:border-slate-800">
             <div className="relative">
               <img src={selectedImage} alt="Preview" className="h-20 w-auto rounded" />
               <button 
@@ -157,11 +180,11 @@ const Explain = () => {
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 items-end focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex gap-2 items-end focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-all">
           <button 
             type="button" 
             onClick={() => fileInputRef.current?.click()}
-            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
           >
             <CameraIcon className="w-5 h-5" />
           </button>
@@ -171,7 +194,7 @@ const Explain = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your question here..."
-            className="flex-1 bg-transparent border-none focus:ring-0 p-3 max-h-32 resize-none text-slate-900 text-base placeholder:text-slate-400"
+            className="flex-1 bg-transparent border-none focus:ring-0 p-3 max-h-32 resize-none text-slate-900 dark:text-white text-base placeholder:text-slate-400"
             rows={1}
             onKeyDown={(e) => {
               if(e.key === 'Enter' && !e.shiftKey) {
@@ -184,7 +207,7 @@ const Explain = () => {
           <button 
             type="submit"
             disabled={isLoading || (!input.trim() && !selectedImage)}
-            className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-95 shadow-md shadow-blue-100"
+            className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-95 shadow-md shadow-blue-100 dark:shadow-none"
           >
             {isLoading ? <LoaderIcon className="w-5 h-5 animate-spin" /> : <UploadIcon className="w-5 h-5" />}
           </button>
